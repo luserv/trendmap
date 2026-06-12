@@ -9,7 +9,7 @@ Mapa de gestión de contactos con análisis geoespacial de tendencias. Permite u
 | Base de datos | PostgreSQL 16 + PostGIS | `db/` | 5433 |
 | API | Fastify + TypeScript | `api/` | 3000 |
 | Frontend | Next.js 15 + MapLibre GL | `web/` | 5172 |
-| Instagram | FastAPI + instagrapi | (externo) | 8000 |
+| Instagram | FastAPI + instagrapi → [luserv/grapi](https://github.com/luserv/grapi) | (externo) | 8000 |
 
 ---
 
@@ -59,6 +59,18 @@ pnpm dev       # escucha en :5172
 ```
 
 Abrir [http://localhost:5172](http://localhost:5172).
+
+### 4. Servicio Instagram (opcional)
+
+La funcionalidad de vincular cuentas de Instagram y visualizar galerías requiere el servicio **[luserv/grapi](https://github.com/luserv/grapi)** corriendo en el puerto **8000**.
+
+```bash
+git clone https://github.com/luserv/grapi.git
+cd grapi
+docker compose up -d   # levanta FastAPI + PostgreSQL propio
+```
+
+El frontend proxea `/insta/*` → `http://localhost:8000` automáticamente (configurado en `web/next.config.mjs`). Si el servicio no está activo, el resto de la app funciona con normalidad; solo la sección de Instagram en el panel de contacto no mostrará resultados.
 
 ---
 
