@@ -1,0 +1,45 @@
+# ── Dependencias ─────────────────────────────────────────────────────
+node_modules/
+
+# ── Next.js ──────────────────────────────────────────────────────────
+web/.next/
+web/out/
+
+# ── TypeScript build ──────────────────────────────────────────────────
+*.tsbuildinfo
+web/tsconfig.tsbuildinfo
+
+# ── Variables de entorno ─────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ── Bases de datos locales / backups ─────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Logs ─────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ── OS ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editores ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Docker volumes (si se usan localmente) ───────────────────────────
+docker-volumes/
+
+# ── Rust ─────────────────────────────────────────────────────────────
+api-rust/target/
+
+
+.claude/

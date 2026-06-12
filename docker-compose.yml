@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: trenmap-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trenmap
+      POSTGRES_PASSWORD: trenmap
+      POSTGRES_DB: trenmap
+    ports:
+      - "5433:5432"
+    volumes:
+      # Persistencia de datos (sobrevive a `docker compose down`)
+      - trenmap_pgdata:/var/lib/postgresql/data
+      # Scripts de inicialización: se ejecutan en orden SOLO la primera vez
+      # (cuando el volumen está vacío). 01_schema.sql -> 02_data.sql
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trenmap -d trenmap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  trenmap_pgdata:
