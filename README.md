@@ -7,7 +7,7 @@ Mapa de gestión de contactos con análisis geoespacial de tendencias. Permite u
 | Capa | Tecnología | Carpeta | Puerto |
 |------|-----------|---------|--------|
 | Base de datos | PostgreSQL 16 + PostGIS | `db/` | 5433 |
-| API | Fastify + TypeScript | `api/` | 3000 |
+| API | Rust + Axum + sqlx | `api-rust/` | 3000 |
 | Frontend | Next.js 15 + MapLibre GL | `web/` | 5172 |
 | Instagram | FastAPI + instagrapi → [luserv/grapi](https://github.com/luserv/grapi) | (externo) | 8000 |
 
@@ -42,13 +42,17 @@ docker compose ps          # Estado: healthy
 docker exec -it trenmap-db psql -U trenmap -d trenmap -c "\dt"
 ```
 
-### 2. API (Fastify)
+### 2. API (Rust)
+
+Requiere [Rust](https://www.rust-lang.org/) ≥ 1.80.
 
 ```bash
-cd api
-npm install
-npm run dev    # escucha en :3000, recarga automática con tsx watch
+cd api-rust
+cp .env.example .env        # ajustar DATABASE_URL si es necesario
+cargo run                   # compila y escucha en :3000
 ```
+
+> La primera compilación descarga dependencias y puede tomar varios minutos. Las siguientes serán incrementales.
 
 ### 3. Frontend (Next.js)
 
@@ -80,8 +84,8 @@ El frontend proxea `/insta/*` → `http://localhost:8000` automáticamente (conf
 # Terminal 1 — base de datos (solo si no está corriendo)
 docker compose up -d
 
-# Terminal 2 — API
-cd api && npm run dev
+# Terminal 2 — API (Rust)
+cd api-rust && cargo run
 
 # Terminal 3 — frontend
 cd web && pnpm dev
@@ -103,7 +107,17 @@ docker compose down -v && docker compose up -d
 docker exec -it trenmap-db psql -U trenmap -d trenmap
 ```
 
-### Conexión
+### Configuración de la API Rust
+
+Crear `api-rust/.env`:
+
+```
+DATABASE_URL=postgresql://trenmap:trenmap@localhost:5433/trenmap
+PORT=3000
+HOST=0.0.0.0
+```
+
+### Conexión a la base de datos
 
 ```
 Host:     localhost
@@ -114,6 +128,10 @@ Password: trenmap
 
 URL: postgresql://trenmap:trenmap@localhost:5433/trenmap
 ```
+
+### Proxy del frontend
+
+El frontend proxea `/api/*` → `http://localhost:3000/*` (Rust) y `/insta/*` → `http://localhost:8000` (Instagram), configurado en `web/next.config.mjs`.
 
 ---
 
@@ -126,17 +144,25 @@ trendmap/
 │   ├── 01_schema.sql      # Esquema: tablas + extensiones PostGIS
 │   ├── 02_data.sql        # Datos iniciales (contactos migrados de SQLite)
 │   └── 03_zones.sql       # Tabla de zonas geográficas
-├── api/                   # Fastify API (TypeScript)
-│   ├── src/
-│   │   ├── server.ts
-│   │   └── routes/
-│   │       ├── contacts.ts
-│   │       ├── geo.ts
-│   │       ├── traits.ts
-│   │       └── zones.ts
-│   └── package.json
+├── api-rust/              # Rust API (Axum + sqlx + PostGIS)
+│   └── src/
+│       ├── main.rs
+│       ├── db.rs
+│       ├── error.rs
+│       └── routes/
+│           ├── mod.rs
+│           ├── contacts.rs
+│           ├── geo.rs
+│           ├── traits.rs
+│           ├── zones.rs
+│           ├── relationships.rs
+│           └── ...
 └── web/                   # Next.js frontend
     ├── app/
+    │   ├── contacts/      # Página de lista con cumpleaños por mes
+    │   ├── contacto/
+    │   │   └── [id]/      # Detalle/edición de contacto, árbol familiar, galería
+    │   └── page.tsx       # Dashboard (mapa principal)
     ├── components/
     │   ├── Dashboard.tsx
     │   ├── ContactPanel.tsx
@@ -152,7 +178,9 @@ trendmap/
 ## Funcionalidades
 
 - **Mapa interactivo** — puntos coloreados por tendencia principal, popup al hacer clic
-- **Contactos** — CRUD completo, búsqueda, ubicar/reubicar en el mapa
+- **Contactos** — CRUD completo, búsqueda, orden por fecha, ubicar/reubicar en el mapa
+- **Lista de contactos** (`/contacts`) — tabla completa con búsqueda, orden asc/desc, y vista de cumpleaños agrupados por mes
+- **Detalle de contacto** (`/contacto/[id]`) — ficha con todos los datos, modo edición inline y eliminación
 - **Zonas** — dibujar polígonos en el mapa, ver contactos dentro de cada zona
 - **Tendencias** — catálogo con CRUD, asignación por contacto, leyenda editable
 - **Árbol familiar** — visualización de relaciones con React Flow
