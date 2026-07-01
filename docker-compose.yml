@@ -10,10 +10,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      # Persistencia de datos (sobrevive a `docker compose down`)
       - trenmap_pgdata:/var/lib/postgresql/data
-      # Scripts de inicialización: se ejecutan en orden SOLO la primera vez
-      # (cuando el volumen está vacío). 01_schema.sql -> 02_data.sql
       - ./db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trenmap -d trenmap"]
@@ -21,5 +18,42 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    build:
+      context: ./api-rust
+      dockerfile: Dockerfile.dev
+    container_name: trenmap-api
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api-rust:/app
+      - cargo-target:/app/target
+    environment:
+      DATABASE_URL: postgresql://trenmap:trenmap@db:5432/trenmap
+      PORT: "3000"
+      HOST: "0.0.0.0"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: trenmap-web
+    ports:
+      - "5172:5172"
+    volumes:
+      - ./web:/app
+      - pnpm-store:/root/.local/share/pnpm/store
+    environment:
+      CI: "true"
+      API_URL: http://api:3000
+      WATCHPACK_POLLING: "true"
+    depends_on:
+      - api
+
 volumes:
   trenmap_pgdata:
+  cargo-target:
+  pnpm-store:

@@ -1251,40 +1251,106 @@ main {
 .birthdays-page {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
 }
-.birthday-month {
-  margin-bottom: 4px;
-}
-.birthday-month-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 10px 16px 6px;
-  margin: 0;
-}
-.birthday-row {
+
+/* ── Calendar header ── */
+.cal-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px 6px;
+}
+.cal-title {
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 140px;
+  text-align: center;
+}
+.cal-nav {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background 0.12s;
+}
+.cal-nav:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+/* ── Calendar grid ── */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 4px 12px;
+}
+.cal-dow {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 0;
+}
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: background 0.12s;
+  cursor: default;
+}
+.cal-cell.empty { cursor: default; }
+.cal-cell.has { cursor: pointer; }
+.cal-cell.has:hover { background: rgba(255,255,255,0.08); }
+.cal-cell.sel { background: var(--accent-2) !important; color: #fff; }
+.cal-num { position: relative; z-index: 1; }
+.cal-dot {
+  position: absolute;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-2);
+}
+.cal-cell.sel .cal-dot { background: #fff; }
+
+/* ── Day detail panel ── */
+.cal-detail {
+  margin: 6px 12px 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.cal-detail-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-2);
+}
+.cal-contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.1s;
 }
-.birthday-row:hover { background: rgba(255,255,255,0.04); }
-.birthday-name {
-  flex: 1;
-  font-size: 13.5px;
+.cal-contact:hover { background: rgba(255,255,255,0.05); }
+.cal-contact-name {
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.birthday-date {
-  font-size: 12px;
-  color: var(--accent-2);
-  font-weight: 500;
   white-space: nowrap;
 }
 
@@ -1358,3 +1424,46 @@ main {
 .btn.secondary:hover { background: rgba(255,255,255,0.12); }
 .btn.danger { background: #dc2626; color: #fff; }
 .btn.danger:hover { background: #b91c1c; }
+
+/* ── Responsive: /contacts + /contacto/[id] ─────────────────── */
+@media (max-width: 639px) {
+  .contacts-nav { padding: 10px 12px; gap: 8px; }
+  .contacts-nav h1 { font-size: 14px; }
+  .contacts-nav .contact-count { font-size: 11px; padding: 1px 6px; }
+
+  .contacts-toolbar { padding: 8px 12px; flex-wrap: wrap; }
+  .contacts-toolbar .search-wrap { min-width: 0; flex: 1 1 100%; }
+  .contacts-toolbar .sort-btn { flex: 1; justify-content: center; }
+  .sort-btn span { font-size: 11px; }
+
+  .contact-row { padding: 10px 12px; }
+  .contact-row-main { padding: 6px 0; }
+  .row-delete { opacity: 1; margin-right: 0; }  /* always visible on mobile */
+
+  .contacts-tabs { padding: 4px 12px; gap: 3px; }
+  .contacts-tabs .tab { font-size: 11.5px; padding: 5px 10px; }
+
+  .cal-grid { padding: 4px 8px; gap: 1px; }
+  .cal-cell { font-size: 12px; border-radius: 6px; }
+  .cal-header { padding: 8px 12px 4px; }
+  .cal-title { font-size: 14px; min-width: 120px; }
+  .cal-detail { margin: 4px 8px 8px; }
+
+  .contact-detail-header { padding: 10px 12px; }
+  .contact-detail-header h1 { font-size: 14px; }
+  .contact-detail-body { padding: 12px; }
+  .edit-fields { max-width: 100%; }
+  .edit-row { flex-direction: column; gap: 6px; }
+
+  .modal { width: 100%; max-width: none; margin: 0 12px; max-height: 85vh; }
+  .modal-sm { max-width: none; }
+  .modal-header { padding: 12px 16px; }
+  .modal-header h2 { font-size: 14px; }
+  .modal-body { padding: 12px 16px; }
+  .modal-body input, .modal-body select { padding: 10px; font-size: 14px; }
+  .modal-footer { padding: 10px 16px; }
+  .btn { padding: 8px 16px; font-size: 14px; }
+
+  .delete-zone .btn.danger { width: 100%; justify-content: center; }
+  .delete-confirm { flex-wrap: wrap; }
+}

@@ -15,21 +15,29 @@ Mapa de gestión de contactos con análisis geoespacial de tendencias. Permite u
 
 ## Requisitos previos
 
-- [Docker](https://docs.docker.com/get-docker/) y Docker Compose
-- [Node.js](https://nodejs.org/) ≥ 20
-- [pnpm](https://pnpm.io/installation) (`npm install -g pnpm`)
+- [Docker](https://docs.docker.com/get-docker/) y Docker Compose (incluido con Docker Desktop o `docker compose plugin`)
+
+> Ya no es necesario instalar Rust, Node.js ni pnpm localmente. Todo corre dentro de contenedores con recarga automática al editar código.
 
 ---
 
 ## Inicialización (primera vez)
 
-### 1. Base de datos
+Levanta **base de datos**, **API Rust** y **frontend Next.js**:
 
 ```bash
-docker compose up -d
+docker compose up
 ```
 
-Levanta PostgreSQL 16 + PostGIS en el puerto **5433**. Los scripts de `db/` se ejecutan automáticamente la primera vez que el volumen está vacío:
+Esto inicia:
+
+| Servicio | Puerto | Recarga automática |
+|----------|--------|--------------------|
+| `db` — PostgreSQL 16 + PostGIS | 5433 | — |
+| `api` — Rust Axum | 3000 | `cargo-watch` (recompila al guardar) |
+| `web` — Next.js 15 + Turbopack | 5172 | HMR (refleja cambios al instante) |
+
+Los scripts de `db/` se ejecutan automáticamente la primera vez que el volumen está vacío:
 
 - `01_schema.sql` — esquema completo
 - `02_data.sql` — datos migrados (571 contactos) — **no incluido en el repositorio** por contener información personal. Si tienes acceso a este archivo, colócalo en `db/` antes del primer `docker compose up`.
@@ -38,33 +46,17 @@ Levanta PostgreSQL 16 + PostGIS en el puerto **5433**. Los scripts de `db/` se e
 Verificar que está listo:
 
 ```bash
-docker compose ps          # Estado: healthy
+docker compose ps          # todos deben mostrar "Up" o "healthy"
 docker exec -it trenmap-db psql -U trenmap -d trenmap -c "\dt"
-```
-
-### 2. API (Rust)
-
-Requiere [Rust](https://www.rust-lang.org/) ≥ 1.80.
-
-```bash
-cd api-rust
-cp .env.example .env        # ajustar DATABASE_URL si es necesario
-cargo run                   # compila y escucha en :3000
-```
-
-> La primera compilación descarga dependencias y puede tomar varios minutos. Las siguientes serán incrementales.
-
-### 3. Frontend (Next.js)
-
-```bash
-cd web
-pnpm install
-pnpm dev       # escucha en :5172
 ```
 
 Abrir [http://localhost:5172](http://localhost:5172).
 
-### 4. Servicio Instagram (opcional)
+> La primera compilación del backend Rust descarga dependencias y puede tomar varios minutos. Las compilaciones siguientes serán incrementales y mucho más rápidas gracias al volumen persistente `cargo-target`.
+>
+> El servicio `web` inyecta `CI=true` para evitar prompts interactivos de pnpm, y el archivo `web/.npmrc` incluye `confirmModulesPurge=false` y la lista blanca de `onlyBuiltDependencies` necesaria para sharp y SWC. El store global de pnpm se persiste en el volumen `pnpm-store` para no redescargar en cada reinicio.
+
+### Servicio Instagram (opcional)
 
 La funcionalidad de vincular cuentas de Instagram y visualizar galerías requiere el servicio **[luserv/grapi](https://github.com/luserv/grapi)** corriendo en el puerto **8000**.
 
@@ -74,21 +66,25 @@ cd grapi
 docker compose up -d   # levanta FastAPI + PostgreSQL propio
 ```
 
-El frontend proxea `/insta/*` → `http://localhost:8000` automáticamente (configurado en `web/next.config.mjs`). Si el servicio no está activo, el resto de la app funciona con normalidad; solo la sección de Instagram en el panel de contacto no mostrará resultados.
+El frontend proxea `/insta/*` → `http://host.docker.internal:8000` automáticamente (configurado en `web/next.config.mjs`). Si el servicio no está activo, el resto de la app funciona con normalidad; solo la sección de Instagram en el panel de contacto no mostrará resultados.
 
 ---
 
-## Flujo de trabajo habitual
+## Flujo de trabajo
 
 ```bash
-# Terminal 1 — base de datos (solo si no está corriendo)
+# Arrancar todo (con recarga automática)
+docker compose up
+
+# O en segundo plano
 docker compose up -d
+docker compose logs -f   # seguir logs de todos los servicios
 
-# Terminal 2 — API (Rust)
-cd api-rust && cargo run
+# Detener
+docker compose down
 
-# Terminal 3 — frontend
-cd web && pnpm dev
+# Reconstruir imágenes tras cambios en Dockerfile o package.json
+docker compose up --build
 ```
 
 ---
@@ -96,8 +92,8 @@ cd web && pnpm dev
 ## Gestión de la base de datos
 
 ```bash
-docker compose up -d        # arrancar (preserva datos)
-docker compose down         # parar (preserva datos)
+docker compose up -d db     # arrancar solo la base (preserva datos)
+docker compose down         # parar todo (preserva datos)
 docker compose down -v      # ⚠️ parar y BORRAR todos los datos
 
 # Reinicializar desde cero (re-ejecuta los scripts SQL)
@@ -107,17 +103,9 @@ docker compose down -v && docker compose up -d
 docker exec -it trenmap-db psql -U trenmap -d trenmap
 ```
 
-### Configuración de la API Rust
-
-Crear `api-rust/.env`:
-
-```
-DATABASE_URL=postgresql://trenmap:trenmap@localhost:5433/trenmap
-PORT=3000
-HOST=0.0.0.0
-```
-
 ### Conexión a la base de datos
+
+Desde el host:
 
 ```
 Host:     localhost
@@ -129,9 +117,11 @@ Password: trenmap
 URL: postgresql://trenmap:trenmap@localhost:5433/trenmap
 ```
 
-### Proxy del frontend
+Dentro de la red de Docker (para otros contenedores):
 
-El frontend proxea `/api/*` → `http://localhost:3000/*` (Rust) y `/insta/*` → `http://localhost:8000` (Instagram), configurado en `web/next.config.mjs`.
+```
+URL: postgresql://trenmap:trenmap@db:5432/trenmap
+```
 
 ---
 
@@ -142,9 +132,10 @@ trendmap/
 ├── docker-compose.yml
 ├── db/
 │   ├── 01_schema.sql      # Esquema: tablas + extensiones PostGIS
-│   ├── 02_data.sql        # Datos iniciales (contactos migrados de SQLite)
+│   ├── 02_data.sql        # Datos iniciales — no incluido en el repo (datos personales)
 │   └── 03_zones.sql       # Tabla de zonas geográficas
 ├── api-rust/              # Rust API (Axum + sqlx + PostGIS)
+│   ├── Dockerfile.dev     # Imagen de desarrollo con cargo-watch
 │   └── src/
 │       ├── main.rs
 │       ├── db.rs
@@ -158,6 +149,10 @@ trendmap/
 │           ├── relationships.rs
 │           └── ...
 └── web/                   # Next.js frontend
+    ├── .dockerignore
+    ├── .npmrc              # Config pnpm: build scripts permitidos + confirmModulesPurge=false
+    ├── next.config.mjs     # Proxy /api/* → Rust, /insta/* → grapi
+    ├── Dockerfile.dev      # Imagen de desarrollo con HMR
     ├── app/
     │   ├── contacts/      # Página de lista con cumpleaños por mes
     │   ├── contacto/

@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUp, ArrowDown, Search, X, Plus, Trash2, Cake } from "lucide-react";
+import { ArrowUp, ArrowDown, Search, X, Plus, Trash2, Cake, ChevronLeft, ChevronRight } from "lucide-react";
 import { api, type ContactListItem } from "@/lib/api";
 
 const MONTHS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+const DAY_HEADERS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 function parseBirthday(bd: string): { day: number; month: number } | null {
   const dm = bd.match(/^(\d{1,2})\/(\d{1,2})\//);
@@ -45,6 +46,11 @@ export default function ContactsPage() {
   const [newStatus, setNewStatus] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // ── calendar ──
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calYear, setCalYear] = useState(new Date().getFullYear());
+  const [selDay, setSelDay] = useState<{ m: number; d: number } | null>(null);
+
   // ── delete confirm ──
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -69,15 +75,39 @@ export default function ContactsPage() {
     setOrder((v) => (v === "desc" ? "asc" : "desc"));
   }
 
-  const birthdayGroups = useMemo(() => {
-    const groups: { month: number; contacts: ContactListItem[] }[] = MONTHS.map((_, i) => ({ month: i, contacts: [] }));
+  const birthdayMap = useMemo(() => {
+    const map = new Map<string, ContactListItem[]>();
     for (const c of contacts) {
       if (!c.birthdate) continue;
       const bd = parseBirthday(c.birthdate);
-      if (bd) groups[bd.month - 1].contacts.push(c);
+      if (bd) {
+        const key = `${bd.month}-${bd.day}`;
+        if (map.has(key)) map.get(key)!.push(c);
+        else map.set(key, [c]);
+      }
     }
-    return groups;
+    return map;
   }, [contacts]);
+
+  const calendarGrid = useMemo(() => {
+    const first = new Date(calYear, calMonth, 1).getDay();
+    const days = new Date(calYear, calMonth + 1, 0).getDate();
+    const g: (number | null)[] = [];
+    for (let i = 0; i < first; i++) g.push(null);
+    for (let d = 1; d <= days; d++) g.push(d);
+    return g;
+  }, [calMonth, calYear]);
+
+  function calPrev() {
+    if (calMonth === 0) { setCalMonth(11); setCalYear((y) => y - 1); }
+    else setCalMonth((m) => m - 1);
+    setSelDay(null);
+  }
+  function calNext() {
+    if (calMonth === 11) { setCalMonth(0); setCalYear((y) => y + 1); }
+    else setCalMonth((m) => m + 1);
+    setSelDay(null);
+  }
 
   async function handleCreate() {
     if (!newFirst.trim() || !newSurname.trim()) return;
@@ -245,36 +275,63 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {/* ── Birthdays ── */}
+      {/* ── Birthdays (calendar) ── */}
       {tab === "birthdays" && (
         <div className="birthdays-page">
           {loading ? (
             <p className="empty">Cargando…</p>
           ) : (
-            birthdayGroups.map((g) => {
-              if (g.contacts.length === 0) return null;
-              return (
-                <div className="birthday-month" key={g.month}>
-                  <h3 className="birthday-month-title">{MONTHS[g.month]} · {g.contacts.length}</h3>
-                  {g.contacts.map((c) => {
-                    const name = [c.first_name, c.surname].filter(Boolean).join(" ").trim() || c.contact_id;
-                    const bd = c.birthdate ? parseBirthday(c.birthdate) : null;
-                    const display = bd ? `${bd.day}/${bd.month}` : c.birthdate;
-                    return (
-                      <div className="birthday-row" key={c.contact_id}
-                        onClick={() => router.push(`/contacto/${c.contact_id}`)}>
-                        <span className={`loc-dot-sm ${c.has_location ? "on" : ""}`} />
-                        <span className="birthday-name">{name}</span>
-                        <span className="birthday-date">{display}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })
-          )}
-          {!loading && birthdayGroups.every((g) => g.contacts.length === 0) && (
-            <p className="empty">Sin cumpleaños registrados.</p>
+            <>
+              <div className="cal-header">
+                <button className="cal-nav" onClick={calPrev}><ChevronLeft size={16} /></button>
+                <span className="cal-title">{MONTHS[calMonth]} {calYear}</span>
+                <button className="cal-nav" onClick={calNext}><ChevronRight size={16} /></button>
+              </div>
+              <div className="cal-grid">
+                {DAY_HEADERS.map((d) => (
+                  <div className="cal-dow" key={d}>{d}</div>
+                ))}
+                {calendarGrid.map((day, i) => {
+                  if (day === null) return <div className="cal-cell empty" key={`e-${i}`} />;
+                  const key = `${calMonth + 1}-${day}`;
+                  const list = birthdayMap.get(key);
+                  const has = list && list.length > 0;
+                  const isSel = selDay?.m === calMonth && selDay?.d === day;
+                  return (
+                    <div
+                      className={`cal-cell${has ? " has" : ""}${isSel ? " sel" : ""}`}
+                      key={`d-${day}`}
+                      onClick={() => { if (has) setSelDay(isSel ? null : { m: calMonth, d: day }); }}
+                    >
+                      <span className="cal-num">{day}</span>
+                      {has && <span className="cal-dot" />}
+                    </div>
+                  );
+                })}
+              </div>
+              {selDay && (() => {
+                const key = `${selDay.m + 1}-${selDay.d}`;
+                const list = birthdayMap.get(key) ?? [];
+                return (
+                  <div className="cal-detail">
+                    <h4 className="cal-detail-title">{selDay.d} de {MONTHS[selDay.m]}</h4>
+                    {list.map((c) => {
+                      const name = [c.first_name, c.surname].filter(Boolean).join(" ").trim() || c.contact_id;
+                      return (
+                        <div className="cal-contact" key={c.contact_id}
+                          onClick={() => router.push(`/contacto/${c.contact_id}`)}>
+                          <span className={`loc-dot-sm ${c.has_location ? "on" : ""}`} />
+                          <span className="cal-contact-name">{name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+              {!loading && contacts.filter((c) => c.birthdate).length === 0 && (
+                <p className="empty" style={{ padding: "16px", textAlign: "center" }}>Sin cumpleaños registrados.</p>
+              )}
+            </>
           )}
         </div>
       )}
