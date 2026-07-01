@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { MapPin, Plus, PanelLeftClose } from "lucide-react";
 import type { ContactListItem } from "@/lib/api";
 
@@ -10,6 +11,7 @@ export default function ContactsList({
   assignId,
   onOpen,
   onAssign,
+  onLocate,
   onNew,
   onToggle,
   mobileOpen,
@@ -21,6 +23,7 @@ export default function ContactsList({
   assignId: string | null;
   onOpen: (id: string) => void;
   onAssign: (id: string) => void;
+  onLocate?: (lng: number, lat: number) => void;
   onNew: () => void;
   onToggle: () => void;
   mobileOpen?: boolean;
@@ -31,7 +34,7 @@ export default function ContactsList({
   return (
     <div className={`sidebar-left panel${mobileOpen ? " mobile-open" : ""}${hidden ? " panels-hidden" : ""}`}>
       <div className="section-title-row">
-        <p className="section-title">Contactos · {located}/{contacts.length} ubicados</p>
+        <Link href="/contacts" className="section-title" style={{ textDecoration: "none", cursor: "pointer" }}>Contactos · {located}/{contacts.length} ubicados</Link>
         <div style={{ display: "flex", gap: 4 }}>
           <button className="icon-btn" onClick={onNew} title="Nuevo contacto">
             <Plus size={14} />
@@ -50,12 +53,22 @@ export default function ContactsList({
       <div className="contact-list">
         {contacts.map((c) => {
           const name = [c.first_name, c.surname].filter(Boolean).join(" ").trim() || c.contact_id;
+          const date = c.created_at?.slice(0, 10);
           const isAssigning = assignId === c.contact_id;
           return (
             <div className={`contact-item ${isAssigning ? "assigning" : ""}`} key={c.contact_id}>
               <button className="contact-main" onClick={() => onOpen(c.contact_id)}>
-                <span className={`loc-dot ${c.has_location ? "on" : ""}`} />
+                <span
+                  className={`loc-dot ${c.has_location ? "on clickable" : ""}`}
+                  onClick={(e) => {
+                    if (c.has_location && c.lng != null && c.lat != null) {
+                      e.stopPropagation();
+                      onLocate?.(c.lng, c.lat);
+                    }
+                  }}
+                />
                 <span className="contact-itemname">{name}</span>
+                {date && <span className="contact-date">{date}</span>}
               </button>
               <button
                 className={`icon-btn pin-btn ${isAssigning ? "active" : ""}`}

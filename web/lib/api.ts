@@ -31,7 +31,9 @@ export interface ContactListItem {
   first_name: string;
   middle_name: string | null;
   surname: string;
+  birthdate: string | null;
   gender: string | null;
+  created_at: string;
   lng: number | null;
   lat: number | null;
   has_location: boolean;
@@ -46,6 +48,7 @@ export interface ContactDetail {
   birthdate: string | null;
   status_id: string | null;
   instagram_username: string | null;
+  created_at: string;
   phones: { phone: string; label: string | null }[];
   emails: { email: string; label: string | null }[];
   locations: { id: number; kind: string | null; lng: number; lat: number; is_primary: boolean }[];
@@ -155,8 +158,8 @@ async function del(path: string): Promise<void> {
 }
 
 export const api = {
-  contacts: (q = "", limit = 1000) =>
-    get<ContactListItem[]>(`/contacts?limit=${limit}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
+  contacts: (q = "", limit = 1000, order = "desc") =>
+    get<ContactListItem[]>(`/contacts?limit=${limit}&order=${order}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
   assignLocation: (id: string, lng: number, lat: number, blur = true) =>
     send<{ id: number; lng: number; lat: number }>(`PUT`, `/contacts/${id}/location`, {
       lng,

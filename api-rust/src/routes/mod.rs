@@ -15,6 +15,7 @@ pub mod phones;
 pub mod relationships;
 pub mod traits;
 pub mod urls;
+pub mod zones;
 
 pub fn router(pool: PgPool) -> Router {
     Router::new()
@@ -33,6 +34,7 @@ pub fn router(pool: PgPool) -> Router {
         .merge(traits::router())
         .merge(geo::router())
         .merge(catalogs::router())
+        .merge(zones::router())
         .with_state(pool)
 }
 

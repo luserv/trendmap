@@ -36,7 +36,8 @@ CREATE TABLE contact (
     surname     TEXT NOT NULL,
     birthdate   TEXT,                                  -- texto: formato mixto DD/MM/YYYY en origen
     gender      TEXT CHECK (gender IN ('MALE', 'FEMALE')),
-    status_id   TEXT REFERENCES marital_status (status_id)
+    status_id   TEXT REFERENCES marital_status (status_id),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ----------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelRightClose, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 import Map, {
   Source,
@@ -9,6 +9,7 @@ import Map, {
   Popup,
   NavigationControl,
   type MapLayerMouseEvent,
+  type MapRef,
   type CircleLayer,
   type FillLayer,
   type LineLayer,
@@ -87,7 +88,14 @@ function ringGeoJSON(lng: number, lat: number, meters: number, points = 72) {
 
 export default function Dashboard() {
   const [locations, setLocations] = useState<FeatureCollection | null>(null);
-  const [center, setCenter] = useState({ lng: -78.52, lat: -0.23 });
+  const [center, setCenter] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const l = p.get("lng"), a = p.get("lat");
+      if (l && a) return { lng: parseFloat(l), lat: parseFloat(a) };
+    }
+    return { lng: -78.52, lat: -0.23 };
+  });
   const [radius, setRadius] = useState(10000);
   const [trends, setTrends] = useState<Trend[]>([]);
   const [contact, setContact] = useState<ContactDetail | null>(null);
@@ -101,6 +109,10 @@ export default function Dashboard() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
+  const mapRef = useRef<MapRef>(null);
+  const flyTo = useCallback((lng: number, lat: number) => {
+    mapRef.current?.flyTo({ center: [lng, lat], zoom: 14 });
+  }, []);
 
   // Popup al hacer clic en un punto del mapa
   const [popup, setPopup] = useState<{
@@ -351,6 +363,7 @@ export default function Dashboard() {
         assignId={assignId}
         onOpen={(id) => { openContact(id); setMobileTab("analysis"); }}
         onAssign={setAssignId}
+        onLocate={flyTo}
         onNew={() => setShowNewContact(true)}
         mobileOpen={mobileTab === "contacts"}
         hidden={!leftOpen}
@@ -370,6 +383,7 @@ export default function Dashboard() {
       )}
 
       <Map
+        ref={mapRef}
         initialViewState={{ longitude: center.lng, latitude: center.lat, zoom: 11 }}
         mapStyle={MAP_STYLE}
         interactiveLayerIds={["locations"]}

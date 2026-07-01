@@ -301,6 +301,12 @@ export default function ContactPanel({
               <span>{STATUSES.find(s => s.id === contact.status_id)?.label ?? contact.status_id}</span>
             </div>
           )}
+          {contact.created_at && (
+            <div className="kv">
+              <span>Creado</span>
+              <span>{contact.created_at.slice(0, 10)}</span>
+            </div>
+          )}
           {contact.phones.map((p, i) => (
             <div className="kv" key={i}><span>{p.label ?? "teléfono"}</span><span>{p.phone}</span></div>
           ))}

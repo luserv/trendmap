@@ -35,7 +35,7 @@ pub struct ContactTraitInput {
 pub fn router() -> Router<PgPool> {
     Router::new()
         .route("/traits", get(list_traits).post(create_trait))
-        .route("/traits/:id", patch(update_trait))
+        .route("/traits/:id", patch(update_trait).delete(remove_trait_from_catalog))
         .route("/contacts/:id/traits", post(assign_trait))
         .route("/contacts/:id/traits/:trait_id", delete(remove_trait))
 }
@@ -183,6 +183,22 @@ async fn assign_trait(
         "weight": row.get::<f32, _>("weight"),
         "source": row.get::<Option<String>, _>("source"),
     }))))
+}
+
+async fn remove_trait_from_catalog(
+    State(pool): State<PgPool>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, AppError> {
+    let res = sqlx::query("DELETE FROM trait WHERE id=$1")
+        .bind(id)
+        .execute(&pool)
+        .await?;
+
+    if res.rows_affected() == 0 {
+        Err(AppError::NotFound)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 async fn remove_trait(

@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Proxy hacia el API Fastify para evitar CORS: el cliente llama /api/...
+  // Proxy hacia el API Rust para evitar CORS: el cliente llama /api/...
   async rewrites() {
     return [
       {

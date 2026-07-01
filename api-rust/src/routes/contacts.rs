@@ -1,10 +1,9 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, patch},
     Json, Router,
 };
-use axum::routing::patch;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
@@ -22,6 +21,7 @@ struct ContactRow {
     gender: Option<String>,
     status_id: Option<String>,
     instagram_username: Option<String>,
+    created_at: Option<String>,
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -30,9 +30,11 @@ struct ContactListRow {
     first_name: String,
     middle_name: Option<String>,
     surname: String,
+    birthdate: Option<String>,
     gender: Option<String>,
     status_id: Option<String>,
     instagram_username: Option<String>,
+    created_at: Option<String>,
     lng: Option<f64>,
     lat: Option<f64>,
     has_location: Option<bool>,
@@ -43,6 +45,7 @@ pub struct ListQuery {
     q: Option<String>,
     limit: Option<i64>,
     offset: Option<i64>,
+    order: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -64,22 +67,27 @@ pub struct ContactInput {
 pub fn router() -> Router<PgPool> {
     Router::new()
         .route("/contacts", get(list).post(create))
-        .route("/contacts/:id", get(detail).put(update).delete(remove))
+        .route("/contacts/:id", get(detail).put(update).patch(patch_update).delete(remove))
         .route("/contacts/:id/instagram", patch(patch_instagram))
+        .route("/contacts/:id/family-tree", get(family_tree))
 }
 
 async fn list(
     State(pool): State<PgPool>,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<Value>, AppError> {
-    let limit = q.limit.unwrap_or(50).min(1000);
+    let limit = q.limit.unwrap_or(1000).min(1000);
     let offset = q.offset.unwrap_or(0);
+    let order_dir = match q.order.as_deref() {
+        Some("asc") => "ASC",
+        _ => "DESC",
+    };
 
     let rows: Vec<ContactListRow> = if let Some(search) = &q.q {
         let pattern = format!("%{search}%");
-        sqlx::query_as(
-            "SELECT c.contact_id, c.first_name, c.middle_name, c.surname, c.gender, c.status_id,
-                    c.instagram_username,
+        let sql = format!(
+            "SELECT c.contact_id, c.first_name, c.middle_name, c.surname, c.birthdate, c.gender, c.status_id,
+                    c.instagram_username, c.created_at::text AS created_at,
                     l.lng, l.lat, (l.lng IS NOT NULL) AS has_location
                FROM contact c
                LEFT JOIN LATERAL (
@@ -90,18 +98,19 @@ async fn list(
                   LIMIT 1
                ) l ON true
               WHERE c.first_name ILIKE $1 OR c.surname ILIKE $1
-              ORDER BY c.surname, c.first_name
-              LIMIT $2 OFFSET $3",
-        )
-        .bind(pattern)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&pool)
-        .await?
+              ORDER BY c.created_at {order_dir}
+              LIMIT $2 OFFSET $3"
+        );
+        sqlx::query_as(&sql)
+            .bind(pattern)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&pool)
+            .await?
     } else {
-        sqlx::query_as(
-            "SELECT c.contact_id, c.first_name, c.middle_name, c.surname, c.gender, c.status_id,
-                    c.instagram_username,
+        let sql = format!(
+            "SELECT c.contact_id, c.first_name, c.middle_name, c.surname, c.birthdate, c.gender, c.status_id,
+                    c.instagram_username, c.created_at::text AS created_at,
                     l.lng, l.lat, (l.lng IS NOT NULL) AS has_location
                FROM contact c
                LEFT JOIN LATERAL (
@@ -111,13 +120,14 @@ async fn list(
                   ORDER BY is_primary DESC, id
                   LIMIT 1
                ) l ON true
-              ORDER BY c.surname, c.first_name
-              LIMIT $1 OFFSET $2",
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&pool)
-        .await?
+              ORDER BY c.created_at {order_dir}
+              LIMIT $1 OFFSET $2"
+        );
+        sqlx::query_as(&sql)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&pool)
+            .await?
     };
 
     Ok(Json(json!(rows)))
@@ -152,8 +162,8 @@ async fn detail(
     Path(id): Path<String>,
 ) -> Result<Json<Value>, AppError> {
     let contact: ContactRow = sqlx::query_as(
-        "SELECT contact_id, first_name, middle_name, surname, birthdate, gender, status_id, instagram_username
-           FROM contact WHERE contact_id = $1",
+        "SELECT contact_id, first_name, middle_name, surname, birthdate, gender, status_id, instagram_username, created_at::text AS created_at
+            FROM contact WHERE contact_id = $1",
     )
     .bind(&id)
     .fetch_optional(&pool)
@@ -226,6 +236,7 @@ async fn detail(
         "gender": contact.gender,
         "status_id": contact.status_id,
         "instagram_username": contact.instagram_username,
+        "created_at": contact.created_at,
         "phones": phones,
         "emails": emails,
         "locations": locations,
@@ -243,7 +254,7 @@ async fn update(
             SET first_name=$2, middle_name=$3, surname=$4,
                 birthdate=$5, gender=$6, status_id=$7, instagram_username=$8
           WHERE contact_id=$1
-          RETURNING contact_id, first_name, middle_name, surname, birthdate, gender, status_id, instagram_username",
+         RETURNING contact_id, first_name, middle_name, surname, birthdate, gender, status_id, instagram_username, created_at::text AS created_at",
     )
     .bind(&id)
     .bind(&body.first_name)
@@ -274,6 +285,144 @@ async fn remove(
     } else {
         Ok(StatusCode::NO_CONTENT)
     }
+}
+
+async fn patch_update(
+    State(pool): State<PgPool>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<StatusCode, AppError> {
+    if let Some(Value::String(s)) = body.get("first_name") {
+        if s.trim().is_empty() {
+            return Err(AppError::BadRequest("first_name no puede estar vacío".into()));
+        }
+    }
+    if let Some(Value::String(s)) = body.get("surname") {
+        if s.trim().is_empty() {
+            return Err(AppError::BadRequest("surname no puede estar vacío".into()));
+        }
+    }
+
+    let sql = r#"
+        UPDATE contact SET
+            first_name  = CASE WHEN ($2::jsonb ? 'first_name')  THEN trim(($2::jsonb ->> 'first_name')::text) ELSE first_name END,
+            middle_name = CASE WHEN ($2::jsonb ? 'middle_name') THEN NULLIF(trim(($2::jsonb ->> 'middle_name')::text), '') ELSE middle_name END,
+            surname     = CASE WHEN ($2::jsonb ? 'surname')     THEN trim(($2::jsonb ->> 'surname')::text) ELSE surname END,
+            birthdate   = CASE WHEN ($2::jsonb ? 'birthdate')   THEN ($2::jsonb ->> 'birthdate')::text ELSE birthdate END,
+            gender      = CASE WHEN ($2::jsonb ? 'gender')      THEN ($2::jsonb ->> 'gender')::text ELSE gender END,
+            status_id   = CASE WHEN ($2::jsonb ? 'status_id')   THEN ($2::jsonb ->> 'status_id')::text ELSE status_id END
+        WHERE contact_id = $1
+    "#;
+
+    let res = sqlx::query(sql)
+        .bind(&id)
+        .bind(&body)
+        .execute(&pool)
+        .await?;
+
+    if res.rows_affected() == 0 {
+        Err(AppError::NotFound)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct FamilyTreeQuery {
+    depth: Option<i32>,
+}
+
+async fn family_tree(
+    State(pool): State<PgPool>,
+    Path(id): Path<String>,
+    Query(q): Query<FamilyTreeQuery>,
+) -> Result<Json<Value>, AppError> {
+    let depth = q.depth.unwrap_or(4).min(6);
+
+    let exists: (bool,) = sqlx::query_as(
+        "SELECT EXISTS(SELECT 1 FROM contact WHERE contact_id=$1)",
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await?;
+    if !exists.0 {
+        return Err(AppError::NotFound);
+    }
+
+    let contact_ids: Vec<(String,)> = sqlx::query_as(
+        r#"WITH RECURSIVE family(id, path) AS (
+            SELECT $1::text, ARRAY[$1::text]
+            UNION ALL
+            SELECT n.neighbor, f.path || n.neighbor
+            FROM family f,
+            LATERAL (
+                SELECT related_contact_id AS neighbor
+                FROM contact_relationship WHERE contact_id = f.id
+                UNION ALL
+                SELECT contact_id AS neighbor
+                FROM contact_relationship WHERE related_contact_id = f.id
+            ) n
+            WHERE NOT n.neighbor = ANY(f.path)
+              AND array_length(f.path, 1) <= $2
+        )
+        SELECT DISTINCT id FROM family"#,
+    )
+    .bind(&id)
+    .bind(depth + 1)
+    .fetch_all(&pool)
+    .await?;
+
+    let ids: Vec<&str> = contact_ids.iter().map(|r| r.0.as_str()).collect();
+
+    let node_rows = sqlx::query(
+        r#"SELECT c.contact_id, c.first_name, c.middle_name, c.surname, c.gender,
+                  EXISTS(SELECT 1 FROM contact_location l WHERE l.contact_id=c.contact_id) AS has_location
+             FROM contact c WHERE c.contact_id = ANY($1)"#,
+    )
+    .bind(&ids)
+    .fetch_all(&pool)
+    .await?;
+
+    let nodes: Vec<Value> = node_rows.iter().map(|r| json!({
+        "contact_id": r.get::<String, _>("contact_id"),
+        "first_name": r.get::<String, _>("first_name"),
+        "middle_name": r.get::<Option<String>, _>("middle_name"),
+        "surname": r.get::<String, _>("surname"),
+        "gender": r.get::<Option<String>, _>("gender"),
+        "has_location": r.get::<bool, _>("has_location"),
+    })).collect();
+
+    let edge_rows = sqlx::query(
+        r#"SELECT cr.id, cr.contact_id AS source, cr.related_contact_id AS target,
+                  cr.type_id, rt.label
+             FROM contact_relationship cr
+             JOIN relationship_type rt ON rt.type_id = cr.type_id
+            WHERE cr.contact_id = ANY($1)
+              AND cr.related_contact_id = ANY($1)
+              AND (
+                cr.type_id IN ('padre','madre','abuelo','abuela','tio','tia')
+                OR
+                (cr.type_id IN ('conyuge','hermano','hermana','primo','prima')
+                 AND cr.contact_id < cr.related_contact_id)
+              )"#,
+    )
+    .bind(&ids)
+    .fetch_all(&pool)
+    .await?;
+
+    let edges: Vec<Value> = edge_rows.iter().map(|r| json!({
+        "id": r.get::<i64, _>("id"),
+        "source": r.get::<String, _>("source"),
+        "target": r.get::<String, _>("target"),
+        "type_id": r.get::<String, _>("type_id"),
+        "label": r.get::<String, _>("label"),
+    })).collect();
+
+    Ok(Json(json!({
+        "root_id": id,
+        "nodes": nodes,
+        "edges": edges,
+    })))
 }
 
 async fn patch_instagram(
