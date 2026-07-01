@@ -20,6 +20,9 @@ web/tsconfig.tsbuildinfo
 *.sqlite
 *.sqlite3
 
+# ── Datos de contacto (información personal) ─────────────────────────
+db/02_data.sql
+
 # ── Logs ─────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*

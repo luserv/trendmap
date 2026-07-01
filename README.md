@@ -32,7 +32,7 @@ docker compose up -d
 Levanta PostgreSQL 16 + PostGIS en el puerto **5433**. Los scripts de `db/` se ejecutan automáticamente la primera vez que el volumen está vacío:
 
 - `01_schema.sql` — esquema completo
-- `02_data.sql` — datos migrados (571 contactos)
+- `02_data.sql` — datos migrados (571 contactos) — **no incluido en el repositorio** por contener información personal. Si tienes acceso a este archivo, colócalo en `db/` antes del primer `docker compose up`.
 - `03_zones.sql` — tabla de zonas geográficas
 
 Verificar que está listo:
